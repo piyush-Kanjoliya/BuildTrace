@@ -1,0 +1,73 @@
+# ---------------------------------------------------------------------------
+# BuildTrace - full local stack: MongoDB + API/Socket.IO + nginx-served SPA
+#
+#   JWT_SECRET=$(openssl rand -hex 32) docker compose up --build -d
+#   docker compose exec backend npm run seed -- --force    # optional demo data
+#   open http://localhost:8080
+#
+# Only the frontend port is published; nginx proxies /api, /health and
+# /socket.io to the backend over the internal network (same-origin, no CORS).
+# ---------------------------------------------------------------------------
+name: buildtrace
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: mongodb://mongo:27017/buildtrace
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-600}
+      RATE_LIMIT_LOGIN_MAX: ${RATE_LIMIT_LOGIN_MAX:-20}
+      CORRELATION_WINDOW_MINUTES: ${CORRELATION_WINDOW_MINUTES:-60}
+      CORRELATION_W_PROXIMITY: ${CORRELATION_W_PROXIMITY:-0.45}
+      CORRELATION_W_ENVIRONMENT: ${CORRELATION_W_ENVIRONMENT:-0.20}
+      CORRELATION_W_SERVICE: ${CORRELATION_W_SERVICE:-0.20}
+      CORRELATION_W_CHANGE_SIGNALS: ${CORRELATION_W_CHANGE_SIGNALS:-0.15}
+      LATE_EVENT_THRESHOLD_MINUTES: ${LATE_EVENT_THRESHOLD_MINUTES:-5}
+      SEED_PASSWORD: ${SEED_PASSWORD:-BuildTrace123!}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  mongo-data:
