@@ -22,11 +22,14 @@ export function SocketProvider({ children }) {
       setConnected(false);
       return undefined;
     }
-    const instance = io({
-      path: '/socket.io',
-      auth: { token: getToken() },
-      transports: ['websocket', 'polling'],
-    });
+    const instance = io(
+  import.meta.env.VITE_SOCKET_URL || undefined,
+  {
+    path: '/socket.io',
+    auth: { token: getToken() },
+    transports: ['websocket', 'polling'],
+  }
+);
     instance.on('connect', () => setConnected(true));
     instance.on('disconnect', () => setConnected(false));
     instance.on('connect_error', () => setConnected(false));

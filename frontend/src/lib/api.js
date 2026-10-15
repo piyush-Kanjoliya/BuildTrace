@@ -38,7 +38,12 @@ export class ApiError extends Error {
   }
 }
 
-const http = axios.create({ baseURL: '/api/v1', timeout: 20000 });
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api/v1';
+
+const http = axios.create({
+  baseURL: API_BASE_URL,
+  timeout: 20000,
+});
 
 http.interceptors.request.use((config) => {
   const token = getToken();
